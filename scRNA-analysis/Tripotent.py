@@ -15,7 +15,7 @@ from scipy.stats import mannwhitneyu, spearmanr
 sc.settings.set_figure_params(dpi=80, facecolor='white')
 
 # ============================================================================
-# ⭐⭐⭐ CUSTOMIZABLE SECTION ⭐⭐⭐
+# EDIT THIS SECTION!!
 # ============================================================================
 
 # Samples to analyze
