@@ -1,31 +1,41 @@
 #!/usr/bin/env python3
 """
-5pgbm_column_scrna.py
+Neftal Cellular State Scoring and Visualization for pHGG scRNA-seq
+===================================================================
+This script scores and visualizes tumor cell states in pediatric high-grade
+glioma (pHGG) scRNA-seq data using the neftal et al. 2019 framework —
+classifying cells into four meta-module states: MES, AC, OPC, and NPC.
 
-Neftal-style 2D state plot (OPC/NPC vs AC/MES) for scRNA-seq AnnData (.h5ad)
+Workflow:
+    1. Loads all pHGG scRNA-seq samples (SCPCS* folders) and pools them
+    2. Scores each cell for six neftal gene programs (MES1/MES2, AC, OPC, NPC1/NPC2)
+       plus optional cell cycle programs (G1S, G2M)
+    3. Builds relative meta-module axes:
+           x-axis: NPC vs OPC (progenitor subtype)
+           y-axis: (OPC+NPC) vs (AC+MES) (stemness vs differentiation)
+    4. Assigns each cell to a quadrant (OPC-like, NPC-like, AC-like, MES-like)
+    5. Optionally filters to malignant cells only using CNV scores
+    6. Bins gene expression and plots quadrant composition per bin
+    7. Generates publication-quality 2D state plots with quadrant summaries
 
-What this script does:
-- Loads ALL SCPCS* sample folders under BASE_DIR
-- Scores Neftal gene programs (MES1/MES2/AC/OPC/NPC1/NPC2 + optional G1S/G2M)
-- Builds relative meta-module axes (x: NPC vs OPC, y: (OPC+NPC) vs (AC+MES)) using signed log2(|diff|+1)
-- Optionally standardizes axes (recommended when pooling samples)
-- Pools all samples into one object and plots:
-    1) ALL cells Neftal plot (+ left stacked quadrant % bar)
-    2) MALIGNANT-only Neftal plot (+ left stacked quadrant % bar) if --do_malignant_filter and CNV column exists
-- Saves quadrant membership summary CSV(s)
-- Computes % "high expressing" cells for a given gene (old feature)
-- NEW: Bins gene expression into 4 bins (like 0.0–0.4, 0.4–0.8, 0.8–1.2, 1.2–1.6 on log1p scale)
-       and generates a stacked-bar plot of quadrant composition per bin (your notebook sketch).
+Inputs:
+    - pHGG scRNA-seq .h5ad files (SCPCS* sample folders)
+    - Optional: CNV column in adata.obs for malignant cell filtering
+    - Gene of interest for expression binning (set via --color_gene flag)
 
-Expression binning modes:
-- equalwidth_clip (DEFAULT): compute log1p(expr), take lo/hi = color clip percentiles (default 1–99%),
-  then divide that lo→hi range into N equal-width bins.
-- equalwidth: use full min→max range of log1p(expr), divide into N equal-width bins.
-- quantile: use N quantile bins (true quartiles if N=4).
-- edges: user provides explicit bin edges, e.g. "0,0.4,0.8,1.2,1.6"
+Outputs:
+    - Neftal 2D scatter plots with stacked quadrant bar (.png, 300 dpi)
+    - Quadrant summary CSVs (all cells and malignant)
+    - Expression bin stacked bar plots per gene
+    - Run report CSV (gene coverage per program)
 
-CLI notes:
-- --base_dir and --out_dir are OPTIONAL (defaults are set below).
+Usage:
+    python cellular_state.py --color_gene ST8SIA4 --do_malignant_filter
+
+Dependencies:
+    scanpy, numpy, pandas, matplotlib, scipy
+
+Author: Fudhail Sayed
 """
 
 import os
