@@ -1,6 +1,36 @@
 #!/usr/bin/env python3
-from __future__ import annotations
+"""
+TF Activity Inference and Gene Correlation Analysis for pHGG scRNA-seq
+=======================================================================
+This script infers transcription factor (TF) activity at single-cell resolution
+for pediatric high-grade glioma (pHGG) scRNA-seq data and identifies which TFs
+are most correlated with a gene of interest.
 
+Workflow:
+    1. Loads a single pHGG scRNA-seq sample (.h5ad format)
+    2. Maps Ensembl gene IDs to gene symbols using mygene.info
+    3. Normalizes and log-transforms raw counts if needed
+    4. Retrieves DoRothEA TF-gene regulons (confidence levels A/B)
+    5. Runs Univariate Linear Model (ULM) to estimate per-cell TF activity
+    6. Correlates each TF's activity with the gene of interest across all cells
+    7. Outputs a ranked list and publication-quality lollipop plot of the top TFs
+
+Inputs:
+    - pHGG scRNA-seq .h5ad files (SCPCS* sample folders)
+    - Gene of interest — set in the EDIT THIS SECTION block
+
+Outputs:
+    - TF activity matrix (.tsv.gz)
+    - Top TF correlations table (.tsv)
+    - Lollipop figure (.pdf and .png)
+
+Dependencies:
+    scanpy, decoupler, mygene, numpy, pandas, matplotlib
+
+Author: Fudhail Sayed 
+
+"""
+from __future__ import annotations
 from pathlib import Path
 from datetime import datetime
 import numpy as np
