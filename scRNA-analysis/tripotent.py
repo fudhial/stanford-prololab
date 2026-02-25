@@ -1,6 +1,33 @@
 """
-Tri-IPC (EGFR+ OLIG2+) Analysis for PHGG
-Focused analysis using developmental progenitor markers
+Tri-IPC Cell Identification and Characterization for pHGG scRNA-seq
+====================================================================
+This script identifies and characterizes Tri-IPC cells — a developmental
+progenitor population defined by co-expression of EGFR and OLIG2 — in
+pediatric high-grade glioma (pHGG) single-cell RNA-seq data.
+
+Workflow:
+    1. Loads and combines multiple pHGG scRNA-seq samples (.h5ad format)
+    2. Preprocesses data — filtering, normalization, PCA, UMAP, clustering
+    3. Identifies Tri-IPC cells using EGFR+ OLIG2+ co-expression thresholds
+    4. Characterizes Tri-IPC cells by sample and cluster distribution
+    5. Analyzes genes of interest comparing Tri-IPC vs non-Tri-IPC cells
+    6. Generates UMAP visualizations and summary heatmaps
+
+Inputs:
+    - pHGG scRNA-seq .h5ad files (SCPCS* sample folders)
+    - Customizable gene list and expression thresholds (set at top of script)
+
+Outputs:
+    - UMAP plots for EGFR, OLIG2, Tri-IPC identification
+    - Gene overlay plots for each gene of interest
+    - Cluster summary heatmap and CSV
+    - Processed AnnData object (.h5ad)
+
+Dependencies:
+    scanpy, numpy, pandas, matplotlib, seaborn, scipy
+
+Author: Fudhail Sayed 
+
 """
 
 import scanpy as sc
