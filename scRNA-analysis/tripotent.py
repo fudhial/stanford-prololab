@@ -26,7 +26,14 @@ Outputs:
 Dependencies:
     scanpy, numpy, pandas, matplotlib, seaborn, scipy
 
+⚠️ Warning. This script still requires some improving ⚠️ 2/25/26
+    Currently working on a new version of the script that does the following 
+        1. Normalization. Realized that this current script is missing normalize_total() and log1p entirely. 
+        2. LogNorm Layer. 
+        3. Batch Correction with Harmony. (this one is taking too long because low memory. Will complete later when better computer is given ) 
+
 Author: Fudhail Sayed 
+
 
 """
 
