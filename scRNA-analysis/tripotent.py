@@ -61,7 +61,7 @@ SAMPLES_TO_ANALYZE = [
 
 # Genes of interest to analyze
 GENES_OF_INTEREST = [
-    'ST8SIA2',
+    'MAP4K4',
     'EGFR',
     'OLIG2',
     # Add more genes here
