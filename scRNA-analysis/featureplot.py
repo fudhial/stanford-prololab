@@ -966,6 +966,10 @@ def main():
     create_summary_stats(adata, OUTPUT_DIR)
 
     out_h5ad = Path(OUTPUT_DIR) / "integrated_all_samples_v2.h5ad"
+    # Fix mixed-type obs columns before saving
+    for col in adata.obs.columns:
+        if adata.obs[col].dtype == object:
+            adata.obs[col] = adata.obs[col].astype(str)
     adata.write(out_h5ad)
     print(f"\n  Saved: {out_h5ad}")
 
