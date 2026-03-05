@@ -40,6 +40,11 @@ Reproducibility:
 ⚠️  sc.concat uses join='outer' — zero-fills missing genes across samples.
     Switch to join='inner' when gene set consistency across samples is confirmed.
 
+    Add high MAP4k4 expression in overlap figure as well.
+    Do the same with the Tri-IPC figures
+
+    Run same plot on the CH3IL1 ✅
+
 Author: Fudhail Sayed
 Updated: 3/4/26
 """
@@ -47,7 +52,6 @@ Updated: 3/4/26
 import warnings
 from pathlib import Path
 from unittest import result
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -92,11 +96,11 @@ SAMPLES_TO_ANALYZE = [
 ]
 
 # Primary gene of interest for overlap analysis
-FOCUS_GENE = "MAP4K4"
+FOCUS_GENE = "MAP4K4" 
 
 # Additional genes to plot individually on UMAP
 GENES_OF_INTEREST = [
-    "MAP4K4",
+    "CHI3L1",
     "CD44",
     "OLIG2",
     # Add more genes here
@@ -782,7 +786,19 @@ def plot_state_map4k4_overlap(adata, state, output_dir):
         rasterized=True,
     )
 
-    # Layer 2: state-high cells
+    # Layer 2: MAP4K4-high cells (but not state-high)
+    map4k4_only = map4k4_high & ~state_high
+    axes[2].scatter(
+        umap_coords[map4k4_only, 0],
+        umap_coords[map4k4_only, 1],
+        c="#F4D03F",  # yellow
+        s=10,
+        alpha=0.5,
+        label=f"{FOCUS_GENE}-high only",
+        rasterized=True,
+    )
+
+    # Layer 3: state-high cells
     axes[2].scatter(
         umap_coords[state_high, 0],
         umap_coords[state_high, 1],
@@ -793,7 +809,7 @@ def plot_state_map4k4_overlap(adata, state, output_dir):
         rasterized=True,
     )
 
-    # Layer 3: overlap — state-high AND MAP4K4-high
+    # Layer 4: overlap — state-high AND MAP4K4-high
     if overlap.sum() > 0:
         axes[2].scatter(
             umap_coords[overlap, 0],
@@ -808,13 +824,15 @@ def plot_state_map4k4_overlap(adata, state, output_dir):
             rasterized=True,
         )
 
-    axes[2].set_title(f"{state}-high & {FOCUS_GENE}-high Co-localization")
+    axes[2].set_title(f"{state} & {FOCUS_GENE} Co-localization (4-group)")
     axes[2].set_xlabel("")
     axes[2].set_ylabel("")
     axes[2].legend(loc="upper left", fontsize=8)
 
     # Stats annotation bottom-right
-    stats_text = f"Spearman r = {corr:.3f}\np = {pval:.2e} {sig}"
+    pval_display = max(pval, 1e-300)  # floor to avoid 0.00 display
+    pval_str = f"{pval_display:.2e}" if pval_display > 1e-300 else "< 1e-300"
+    stats_text = f"Spearman r = {corr:.3f}\np = {pval_str} {sig}"
     axes[2].text(
         0.98,
         0.02,
