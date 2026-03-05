@@ -2,37 +2,51 @@
 Integrated Multi-Sample pHGG Analysis (v2)
 ==========================================
 Proper preprocessing pipeline:
-    1. QC filtering per sample (MT%, min/max genes)
+    1. QC filtering per sample (MT%, min/max genes, min 500 cells per sample)
     2. normalize_total() + log1p() BEFORE HVG selection
     3. lognorm layer stored for safe gene expression retrieval
     4. adata.raw set correctly (after QC, before normalization)
     5. HVG flavor = 'seurat' (appropriate for lognorm data)
     6. Gene plots pull from lognorm layer — NOT use_raw=True
 
+Batch Correction:
+    - Harmony batch correction via harmonypy (direct call, not scanpy wrapper)
+    - Corrects for patient-level technical variation
+    - Neighbors graph built on X_pca_harmony embedding
+    - Confirmed successful: samples mix across UMAP clusters
+
 Visualizations:
+    - Sample distribution UMAP (batch correction QC)
+    - Leiden clusters
+    - QC metrics (genes per cell, total counts, % MT)
     - For each cell state (MES, OPC, NPC, AC): one dedicated 3-panel figure
         Panel 1: Cell state score on UMAP
         Panel 2: MAP4K4 expression (lognorm) on UMAP
-        Panel 3: Three-group co-localization (same style as Tri-IPC figure)
+        Panel 3: Three-group co-localization
                  Gray = other, State color = state-high, Purple = overlap
                  Spearman r and p-value in bottom-right corner
+    - State dominance distribution (threshold validation plot)
+    - Dominant cell state UMAP
 
-⚠️  TO DO LATER — Harmony batch correction:
-    Currently removed due to memory/compute constraints.
-    When ready, go to embed_and_cluster() and uncomment the Harmony block.
-    Also install: pip install harmonypy
+Reproducibility:
+    - Random seed fixed at 42 (PCA, neighbors, UMAP, Leiden)
+    - State dominance threshold validated at 0.25 from distribution
+    - All paths set in config section — edit BASE_PATH for your system
+    - Run info saved to run_info.txt on each execution
 
 ⚠️  regress_out() removed — too slow/memory intensive on large datasets.
     Add back later when running on a better machine.
 
-⚠️  Seeds not yet added — to be done later alongside tri_ipc_analysis_v2.py
+⚠️  sc.concat uses join='outer' — zero-fills missing genes across samples.
+    Switch to join='inner' when gene set consistency across samples is confirmed.
 
 Author: Fudhail Sayed
-Updated: 2/26/26
+Updated: 3/4/26
 """
 
 import warnings
 from pathlib import Path
+from unittest import result
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -55,6 +69,26 @@ SAMPLES_TO_ANALYZE = [
     "SCPCS000001",
     "SCPCS000002",
     "SCPCS000003",
+    "SCPCS000004",
+    "SCPCS000005",
+    "SCPCS000006",
+    "SCPCS000007",
+    "SCPCS000008",
+    "SCPCS000009",
+    "SCPCS000010",
+    "SCPCS000011",
+    "SCPCS000012",
+    "SCPCS000013",
+    "SCPCS000014",
+    "SCPCS000015",
+    "SCPCS000016",
+    "SCPCS000017",
+    "SCPCS000018",
+    "SCPCS000019",
+    "SCPCS000020",
+    "SCPCS000021",
+    "SCPCS000022",
+    "SCPCS000023",
 ]
 
 # Primary gene of interest for overlap analysis
@@ -86,6 +120,19 @@ STATE_COLORS = {
     "NPC": "#2ECC71",  # green
     "AC": "#F39C12",  # orange
 }
+
+# Set a random seed for reproducibility (to be used later when needed)
+RANDOM_SEED = 42
+
+# Set these paths for your own system
+BASE_PATH = "/Users/fudhailsayed/prololab"
+DATA_DIR = f"{BASE_PATH}/datasets/pHGG_scRNA_anndata/scRNA"
+OUTPUT_DIR = f"{BASE_PATH}/figures/featureplot_figures"
+
+# Minimum score gap between top 2 states to be called dominant state
+# cells below this threshold will be labeled "Mixed", validate it with the dominance distribution plot.
+# 0.25 gives a good balance between calling clear states and not labeling too many cells as "Mixed" — but adjust as needed based on the distribution plot.
+STATE_DOMINANCE_THRESHOLD = 0.25
 
 # ============================================================================
 
@@ -451,6 +498,11 @@ def load_all_samples(data_dir):
             adata.obs["sample_id"] = sample_name
             adata = run_qc_single(adata, sample_name)
 
+            # Filter out bad samples with very few cells after QC
+            if adata.n_obs < 500:
+                print(f"    Skipping {sample_name}: only {adata.n_obs} cells after QC")
+                continue
+
             adatas.append(adata)
             sample_names.append(sample_name)
             print(f"    {adata.n_obs} cells retained")
@@ -544,26 +596,52 @@ def get_lognorm_expression(adata, gene):
 
 def embed_and_cluster(adata):
     """
-    PCA -> neighbors -> UMAP -> Leiden clustering.
-
-    TO DO LATER: Harmony batch correction — awaiting compute.
-    When ready, uncomment the block below and install harmonypy:
-
-    # import harmonypy as hm
-    # ho = hm.run_harmony(adata.obsm['X_pca'], adata.obs, 'sample',
-    #                     max_iter_harmony=20)
-    # adata.obsm['X_pca_harmony'] = ho.Z_corr.T
-    # sc.pp.neighbors(adata, n_neighbors=15, n_pcs=50, use_rep='X_pca_harmony')
-    # (comment out the sc.pp.neighbors line below when using Harmony)
+    PCA -> Harmony batch correction -> neighbors -> UMAP -> Leiden clustering.
     """
     print("\n" + "=" * 80)
     print("EMBEDDING & CLUSTERING")
     print("=" * 80)
 
-    sc.tl.pca(adata, svd_solver="arpack", n_comps=50)
-    sc.pp.neighbors(adata, n_neighbors=15, n_pcs=40)
-    sc.tl.umap(adata)
-    sc.tl.leiden(adata, resolution=0.5)
+    # Step 1: PCA
+    sc.tl.pca(adata, svd_solver="arpack", n_comps=50, random_state=RANDOM_SEED)
+
+    # Step 2: Harmony — called directly to avoid scanpy wrapper shape bug
+    import harmonypy as hm
+
+    ho = hm.run_harmony(
+        adata.obsm["X_pca"],
+        adata.obs,
+        "sample",
+        max_iter_harmony=20,
+        random_state=RANDOM_SEED,
+    )
+
+    # Handle both old and new harmonypy output shapes
+    result = ho.Z_corr
+    print(f"  Harmony raw output shape: {result.shape}")
+    if result.shape[0] == 50:  # old format: (50, cells) — needs transpose
+        adata.obsm["X_pca_harmony"] = result.T
+    elif result.shape[1] == 50:  # new format: (cells, 50) — already correct
+        adata.obsm["X_pca_harmony"] = result
+    else:
+        raise ValueError(f"Unexpected Harmony output shape: {result.shape}")
+
+    print(
+        f"  Harmony complete — corrected embedding shape: {adata.obsm['X_pca_harmony'].shape}"
+    )
+
+    # Step 3: Neighbors on corrected embedding
+    sc.pp.neighbors(
+        adata,
+        n_neighbors=15,
+        n_pcs=50,
+        use_rep="X_pca_harmony",
+        random_state=RANDOM_SEED,
+    )
+
+    # Step 4: UMAP and clustering
+    sc.tl.umap(adata, random_state=RANDOM_SEED)
+    sc.tl.leiden(adata, resolution=0.5, random_state=RANDOM_SEED)
 
     print(f"  {adata.obs['leiden'].nunique()} Leiden clusters")
     return adata
@@ -742,7 +820,7 @@ def plot_state_map4k4_overlap(adata, state, output_dir):
         0.02,
         stats_text,
         transform=axes[2].transAxes,
-        fontsize=9,
+        fontsize=18,
         verticalalignment="bottom",
         horizontalalignment="right",
         bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.85),
@@ -753,6 +831,44 @@ def plot_state_map4k4_overlap(adata, state, output_dir):
     plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()
     print(f"  Saved {out_path.name}")
+
+
+def plot_dominance_distribution(adata, output_dir):
+    """
+    Plot the distribution of state dominance scores to help choose threshold.
+    Dominance = top state score minus second highest score.
+    """
+    state_list = ["MES", "OPC", "NPC", "AC"]
+    score_cols = [f"{s}_score" for s in state_list if f"{s}_score" in adata.obs.columns]
+
+    score_matrix = adata.obs[score_cols].values
+    sorted_scores = np.sort(score_matrix, axis=1)
+    dominance = sorted_scores[:, -1] - sorted_scores[:, -2]
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.hist(dominance, bins=100, color="steelblue", edgecolor="none")
+
+    # Draw vertical lines at candidate thresholds so you can compare
+    for threshold in [0.25, 0.5, 0.75, 1.0]:
+        ax.axvline(threshold, color="red", linestyle="--", alpha=0.7)
+        pct_mixed = (dominance < threshold).mean() * 100
+        ax.text(
+            threshold,
+            ax.get_ylim()[1] * 0.9,
+            f"{threshold}\n({pct_mixed:.0f}% Mixed)",
+            fontsize=8,
+            color="red",
+            ha="center",
+        )
+
+    ax.set_xlabel("Dominance Score (top state - 2nd state)")
+    ax.set_ylabel("Number of cells")
+    ax.set_title("State Dominance Distribution — use this to pick threshold")
+
+    plt.tight_layout()
+    plt.savefig(output_dir / "dominance_distribution.png", dpi=300, bbox_inches="tight")
+    plt.close()
+    print("  Saved dominance_distribution.png")
 
 
 def create_visualizations(adata, output_dir, genes_of_interest=None):
@@ -862,6 +978,8 @@ def create_visualizations(adata, output_dir, genes_of_interest=None):
             plt.close()
             print(f"     {gene} saved")
 
+    plot_dominance_distribution(adata, output_dir)
+
     # 6. Dominant cell state
     print("\n  6. Dominant cell state...")
     state_list = ["MES", "OPC", "NPC", "AC"]
@@ -875,7 +993,9 @@ def create_visualizations(adata, output_dir, genes_of_interest=None):
         ]
         sorted_scores = np.sort(score_matrix, axis=1)
         adata.obs["state_dominance"] = sorted_scores[:, -1] - sorted_scores[:, -2]
-        adata.obs.loc[adata.obs["state_dominance"] < 0.5, "dominant_state"] = "Mixed"
+        adata.obs.loc[
+            adata.obs["state_dominance"] < STATE_DOMINANCE_THRESHOLD, "dominant_state"
+        ] = "Mixed"
 
         palette = {
             "MES": "#E74C3C",
@@ -951,10 +1071,6 @@ def main():
     print("INTEGRATED pHGG ANALYSIS v2")
     print(f"Samples: {', '.join(SAMPLES_TO_ANALYZE)}")
     print("=" * 80)
-
-    BASE_PATH = "/Users/fudhailsayed/prololab"
-    DATA_DIR = f"{BASE_PATH}/datasets/pHGG_scRNA_anndata/scRNA"
-    OUTPUT_DIR = f"{BASE_PATH}/figures/integrated_analysis_v2"
 
     adata = load_all_samples(DATA_DIR)
     adata = preprocess_integrated(adata)
