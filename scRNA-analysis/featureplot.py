@@ -34,17 +34,6 @@ Reproducibility:
     - All paths set in config section — edit BASE_PATH for your system
     - Run info saved to run_info.txt on each execution
 
-⚠️  regress_out() removed — too slow/memory intensive on large datasets.
-    Add back later when running on a better machine.
-
-⚠️  sc.concat uses join='outer' — zero-fills missing genes across samples.
-    Switch to join='inner' when gene set consistency across samples is confirmed.
-
-    Add high MAP4k4 expression in overlap figure as well.
-    Do the same with the Tri-IPC figures
-
-    Run same plot on the CH3IL1 ✅
-
 Author: Fudhail Sayed
 Updated: 3/4/26
 """
